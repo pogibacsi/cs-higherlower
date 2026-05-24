@@ -23,14 +23,14 @@ export async function getPlayableItems(): Promise<ItemSequenceEntry[]> {
       and(
         eq(items.active, true),
         inArray(currentItemPrices.status, ["success", "stale"]),
-        gt(currentItemPrices.priceEur, "0")
+        gt(currentItemPrices.priceEur, 0)
       )
     )
     .orderBy(desc(currentItemPrices.priceEur));
 
   return rows.map((row) => ({
     ...row,
-    priceEur: Number(row.priceEur)
+    priceEur: row.priceEur
   }));
 }
 

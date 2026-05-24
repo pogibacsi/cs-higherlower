@@ -1,9 +1,10 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, gt, sql } from "drizzle-orm";
 import {
   currentItemPrices,
   itemPrices,
   items,
-  priceFetchRuns
+  priceFetchRuns,
+  syncState
 } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
@@ -13,8 +14,18 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function fetchWithRetry(provider: PriceProvider, marketHashName: string) {
-  let delay = env.PRICE_SYNC_DELAY_MS;
+type RunPriceSyncOptions = {
+  database?: D1Database;
+  maxItems?: number;
+  delayMs?: number;
+};
+
+async function fetchWithRetry(
+  provider: PriceProvider,
+  marketHashName: string,
+  delayMs: number
+) {
+  let delay = delayMs;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const result = await provider.fetchPrice(marketHashName);
     if (result.ok) return result;
@@ -24,20 +35,52 @@ async function fetchWithRetry(provider: PriceProvider, marketHashName: string) {
   return provider.fetchPrice(marketHashName);
 }
 
-export async function runPriceSync(provider: PriceProvider) {
-  const db = getDb();
-  const activeItems = await db
+export async function runPriceSync(
+  provider: PriceProvider,
+  options: RunPriceSyncOptions = {}
+) {
+  const db = getDb(options.database);
+  const maxItems = Math.max(1, options.maxItems ?? env.PRICE_SYNC_BATCH_SIZE);
+  const delayMs = Math.max(0, options.delayMs ?? env.PRICE_SYNC_DELAY_MS);
+  const cursorKey = `${provider.name}_price_cursor`;
+
+  const [cursorRow] = await db
+    .select({ value: syncState.value })
+    .from(syncState)
+    .where(eq(syncState.key, cursorKey));
+
+  const selectBatch = (after?: string) =>
+    db
+      .select({
+        id: items.id,
+        marketHashName: items.marketHashName
+      })
+      .from(items)
+      .where(
+        and(
+          eq(items.active, true),
+          after ? gt(items.marketHashName, after) : undefined
+        )
+      )
+      .orderBy(asc(items.marketHashName))
+      .limit(maxItems);
+
+  let activeItems = await selectBatch(cursorRow?.value);
+  if (activeItems.length === 0 && cursorRow?.value) {
+    activeItems = await selectBatch();
+  }
+
+  const [totalRow] = await db
     .select({
-      id: items.id,
-      marketHashName: items.marketHashName
+      count: sql<number>`count(*)`
     })
     .from(items)
-    .where(eq(items.active, true))
-    .orderBy(asc(items.marketHashName));
+    .where(eq(items.active, true));
+  const totalActiveItems = Number(totalRow?.count ?? activeItems.length);
 
   const [run] = await db
     .insert(priceFetchRuns)
-    .values({ status: "running", totalItems: activeItems.length })
+    .values({ status: "running", totalItems: totalActiveItems ?? activeItems.length })
     .returning();
 
   let successCount = 0;
@@ -45,17 +88,17 @@ export async function runPriceSync(provider: PriceProvider) {
   const errors: Array<{ marketHashName: string; error: string }> = [];
 
   for (let index = 0; index < activeItems.length; index += env.PRICE_SYNC_BATCH_SIZE) {
-    const batch = activeItems.slice(index, index + env.PRICE_SYNC_BATCH_SIZE);
+    const batch = activeItems.slice(index, index + maxItems);
 
     for (const item of batch) {
-      const result = await fetchWithRetry(provider, item.marketHashName);
+      const result = await fetchWithRetry(provider, item.marketHashName, delayMs);
       const now = new Date();
 
       if (result.ok) {
         successCount += 1;
         await db.insert(itemPrices).values({
           itemId: item.id,
-          priceEur: result.priceEur.toFixed(2),
+          priceEur: Number(result.priceEur.toFixed(2)),
           volume: result.volume,
           source: provider.name,
           fetchedAt: now,
@@ -67,7 +110,7 @@ export async function runPriceSync(provider: PriceProvider) {
           .insert(currentItemPrices)
           .values({
             itemId: item.id,
-            priceEur: result.priceEur.toFixed(2),
+            priceEur: Number(result.priceEur.toFixed(2)),
             currency: "EUR",
             lastSuccessfulFetchAt: now,
             status: "success",
@@ -76,7 +119,7 @@ export async function runPriceSync(provider: PriceProvider) {
           .onConflictDoUpdate({
             target: currentItemPrices.itemId,
             set: {
-              priceEur: result.priceEur.toFixed(2),
+              priceEur: Number(result.priceEur.toFixed(2)),
               currency: "EUR",
               lastSuccessfulFetchAt: now,
               status: "success",
@@ -88,7 +131,7 @@ export async function runPriceSync(provider: PriceProvider) {
         errors.push({ marketHashName: item.marketHashName, error: result.error });
         await db.insert(itemPrices).values({
           itemId: item.id,
-          priceEur: "0.00",
+          priceEur: 0,
           volume: null,
           source: provider.name,
           fetchedAt: now,
@@ -105,8 +148,26 @@ export async function runPriceSync(provider: PriceProvider) {
           .where(eq(currentItemPrices.itemId, item.id));
       }
 
-      await sleep(env.PRICE_SYNC_DELAY_MS);
+      await sleep(delayMs);
     }
+  }
+
+  const lastItem = activeItems.at(-1);
+  if (lastItem) {
+    await db
+      .insert(syncState)
+      .values({
+        key: cursorKey,
+        value: lastItem.marketHashName,
+        updatedAt: new Date()
+      })
+      .onConflictDoUpdate({
+        target: syncState.key,
+        set: {
+          value: lastItem.marketHashName,
+          updatedAt: new Date()
+        }
+      });
   }
 
   const status = failCount > 0 && successCount === 0 ? "failed" : "completed";

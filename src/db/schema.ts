@@ -1,64 +1,66 @@
+import { sql } from "drizzle-orm";
 import {
-  boolean,
   index,
   integer,
-  jsonb,
-  numeric,
-  pgEnum,
-  pgTable,
   primaryKey,
+  real,
+  sqliteTable,
   text,
-  timestamp,
-  uniqueIndex,
-  uuid
-} from "drizzle-orm/pg-core";
+  uniqueIndex
+} from "drizzle-orm/sqlite-core";
 
-export const itemCategoryEnum = pgEnum("item_category", [
-  "case",
-  "knife",
-  "glove",
-  "covert_skin"
-]);
-
-export const priceStatusEnum = pgEnum("price_status", [
-  "success",
-  "failed",
-  "stale"
-]);
-
-export const runStatusEnum = pgEnum("price_fetch_run_status", [
-  "running",
-  "completed",
-  "failed"
-]);
-
-export const gameModeEnum = pgEnum("game_mode", ["daily", "classic"]);
-
-export const eventTypeEnum = pgEnum("event_type", [
+export const itemCategories = ["case", "knife", "glove", "covert_skin"] as const;
+export const priceStatuses = ["success", "failed", "stale"] as const;
+export const runStatuses = ["running", "completed", "failed"] as const;
+export const gameModes = ["daily", "classic"] as const;
+export const eventTypes = [
   "game_started",
   "answer_submitted",
   "game_over",
   "score_submitted",
   "partner_embed_loaded"
-]);
+] as const;
 
-export const items = pgTable(
+export type ItemCategory = (typeof itemCategories)[number];
+export type PriceStatus = (typeof priceStatuses)[number];
+export type RunStatus = (typeof runStatuses)[number];
+export type GameMode = (typeof gameModes)[number];
+export type EventType = (typeof eventTypes)[number];
+
+export type ItemSequenceEntry = {
+  id: string;
+  displayName: string;
+  marketHashName: string;
+  category: ItemCategory;
+  imageUrl: string;
+  priceEur: number;
+};
+
+const nowMs = () => new Date();
+
+export const items = sqliteTable(
   "items",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
+    id: text("id")
+      .$defaultFn(() => crypto.randomUUID())
+      .primaryKey(),
     marketHashName: text("market_hash_name").notNull(),
     displayName: text("display_name").notNull(),
-    category: itemCategoryEnum("category").notNull(),
+    category: text("category").$type<ItemCategory>().notNull(),
     rarity: text("rarity"),
     weaponName: text("weapon_name"),
     exterior: text("exterior"),
-    isStatTrak: boolean("is_stattrak").notNull().default(false),
-    isSouvenir: boolean("is_souvenir").notNull().default(false),
+    isStatTrak: integer("is_stattrak", { mode: "boolean" }).notNull().default(false),
+    isSouvenir: integer("is_souvenir", { mode: "boolean" }).notNull().default(false),
     imageUrl: text("image_url").notNull(),
     steamMarketUrl: text("steam_market_url").notNull(),
-    active: boolean("active").notNull().default(true),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(nowMs),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(nowMs)
   },
   (table) => ({
     marketHashNameIdx: uniqueIndex("items_market_hash_name_idx").on(
@@ -67,53 +69,69 @@ export const items = pgTable(
   })
 );
 
-export const itemPrices = pgTable("item_prices", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  itemId: uuid("item_id")
-    .notNull()
-    .references(() => items.id, { onDelete: "cascade" }),
-  currency: text("currency").notNull().default("EUR"),
-  priceEur: numeric("price_eur", { precision: 12, scale: 2 }).notNull(),
-  volume: integer("volume"),
-  source: text("source").notNull().default("steam_market"),
-  fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
-  status: priceStatusEnum("status").notNull(),
-  rawResponse: jsonb("raw_response")
-}, (table) => ({
-  itemFetchedIdx: index("item_prices_item_fetched_idx").on(
-    table.itemId,
-    table.fetchedAt
-  )
-}));
+export const itemPrices = sqliteTable(
+  "item_prices",
+  {
+    id: text("id")
+      .$defaultFn(() => crypto.randomUUID())
+      .primaryKey(),
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id, { onDelete: "cascade" }),
+    currency: text("currency").notNull().default("EUR"),
+    priceEur: real("price_eur").notNull(),
+    volume: integer("volume"),
+    source: text("source").notNull().default("steam_market"),
+    fetchedAt: integer("fetched_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(nowMs),
+    status: text("status").$type<PriceStatus>().notNull(),
+    rawResponse: text("raw_response", { mode: "json" }).$type<unknown>()
+  },
+  (table) => ({
+    itemFetchedIdx: index("item_prices_item_fetched_idx").on(
+      table.itemId,
+      table.fetchedAt
+    )
+  })
+);
 
-export const currentItemPrices = pgTable("current_item_prices", {
-  itemId: uuid("item_id")
+export const currentItemPrices = sqliteTable("current_item_prices", {
+  itemId: text("item_id")
     .primaryKey()
     .references(() => items.id, { onDelete: "cascade" }),
-  priceEur: numeric("price_eur", { precision: 12, scale: 2 }).notNull(),
+  priceEur: real("price_eur").notNull(),
   currency: text("currency").notNull().default("EUR"),
-  lastSuccessfulFetchAt: timestamp("last_successful_fetch_at", {
-    withTimezone: true
+  lastSuccessfulFetchAt: integer("last_successful_fetch_at", {
+    mode: "timestamp_ms"
   }).notNull(),
-  status: priceStatusEnum("status").notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  status: text("status").$type<PriceStatus>().notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(nowMs)
 });
 
-export const priceFetchRuns = pgTable("price_fetch_runs", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
-  finishedAt: timestamp("finished_at", { withTimezone: true }),
-  status: runStatusEnum("status").notNull().default("running"),
+export const priceFetchRuns = sqliteTable("price_fetch_runs", {
+  id: text("id")
+    .$defaultFn(() => crypto.randomUUID())
+    .primaryKey(),
+  startedAt: integer("started_at", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(nowMs),
+  finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
+  status: text("status").$type<RunStatus>().notNull().default("running"),
   totalItems: integer("total_items").notNull().default(0),
   successCount: integer("success_count").notNull().default(0),
   failCount: integer("fail_count").notNull().default(0),
-  errorSummary: jsonb("error_summary")
+  errorSummary: text("error_summary", { mode: "json" }).$type<unknown>()
 });
 
-export const partners = pgTable(
+export const partners = sqliteTable(
   "partners",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
+    id: text("id")
+      .$defaultFn(() => crypto.randomUUID())
+      .primaryKey(),
     name: text("name").notNull(),
     slug: text("slug").notNull(),
     logoUrl: text("logo_url"),
@@ -124,34 +142,38 @@ export const partners = pgTable(
     borderRadius: text("border_radius").notNull().default("12px"),
     ctaLabel: text("cta_label"),
     ctaUrl: text("cta_url"),
-    allowedDomains: text("allowed_domains").array().notNull().default([]),
-    enabled: boolean("enabled").notNull().default(true),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+    allowedDomains: text("allowed_domains", { mode: "json" })
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'`),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(nowMs),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(nowMs)
   },
   (table) => ({
     slugIdx: uniqueIndex("partners_slug_idx").on(table.slug)
   })
 );
 
-export type ItemSequenceEntry = {
-  id: string;
-  displayName: string;
-  marketHashName: string;
-  category: "case" | "knife" | "glove" | "covert_skin";
-  imageUrl: string;
-  priceEur: number;
-};
-
-export const dailyChallenges = pgTable(
+export const dailyChallenges = sqliteTable(
   "daily_challenges",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
+    id: text("id")
+      .$defaultFn(() => crypto.randomUUID())
+      .primaryKey(),
     challengeDate: text("challenge_date").notNull(),
     timezone: text("timezone").notNull(),
     seed: text("seed").notNull(),
-    itemSequence: jsonb("item_sequence").$type<ItemSequenceEntry[]>().notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+    itemSequence: text("item_sequence", { mode: "json" })
+      .$type<ItemSequenceEntry[]>()
+      .notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(nowMs)
   },
   (table) => ({
     challengeDateIdx: uniqueIndex("daily_challenges_date_idx").on(
@@ -160,65 +182,85 @@ export const dailyChallenges = pgTable(
   })
 );
 
-export const gameSessions = pgTable("game_sessions", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  mode: gameModeEnum("mode").notNull(),
-  partnerId: uuid("partner_id").references(() => partners.id, {
+export const gameSessions = sqliteTable("game_sessions", {
+  id: text("id")
+    .$defaultFn(() => crypto.randomUUID())
+    .primaryKey(),
+  mode: text("mode").$type<GameMode>().notNull(),
+  partnerId: text("partner_id").references(() => partners.id, {
     onDelete: "set null"
   }),
   challengeDate: text("challenge_date"),
   anonymousUserId: text("anonymous_user_id").notNull(),
   currentScore: integer("current_score").notNull().default(0),
   currentRound: integer("current_round").notNull().default(0),
-  itemSequence: jsonb("item_sequence").$type<ItemSequenceEntry[]>().notNull(),
-  completed: boolean("completed").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+  itemSequence: text("item_sequence", { mode: "json" })
+    .$type<ItemSequenceEntry[]>()
+    .notNull(),
+  completed: integer("completed", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(nowMs),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(nowMs)
 });
 
-export const scores = pgTable("scores", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  mode: gameModeEnum("mode").notNull(),
-  challengeDate: text("challenge_date"),
-  partnerId: uuid("partner_id").references(() => partners.id, {
-    onDelete: "set null"
-  }),
-  nickname: text("nickname").notNull(),
-  score: integer("score").notNull(),
-  roundsPlayed: integer("rounds_played").notNull(),
-  anonymousUserId: text("anonymous_user_id").notNull(),
-  sessionId: uuid("session_id").references(() => gameSessions.id, {
-    onDelete: "set null"
-  }),
-  userAgentHash: text("user_agent_hash"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
-}, (table) => ({
-  dailyIdx: index("scores_daily_idx").on(
-    table.mode,
-    table.challengeDate,
-    table.score
-  ),
-  partnerIdx: index("scores_partner_idx").on(
-    table.partnerId,
-    table.mode,
-    table.score
-  )
-}));
+export const scores = sqliteTable(
+  "scores",
+  {
+    id: text("id")
+      .$defaultFn(() => crypto.randomUUID())
+      .primaryKey(),
+    mode: text("mode").$type<GameMode>().notNull(),
+    challengeDate: text("challenge_date"),
+    partnerId: text("partner_id").references(() => partners.id, {
+      onDelete: "set null"
+    }),
+    nickname: text("nickname").notNull(),
+    score: integer("score").notNull(),
+    roundsPlayed: integer("rounds_played").notNull(),
+    anonymousUserId: text("anonymous_user_id").notNull(),
+    sessionId: text("session_id").references(() => gameSessions.id, {
+      onDelete: "set null"
+    }),
+    userAgentHash: text("user_agent_hash"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(nowMs)
+  },
+  (table) => ({
+    dailyIdx: index("scores_daily_idx").on(
+      table.mode,
+      table.challengeDate,
+      table.score
+    ),
+    partnerIdx: index("scores_partner_idx").on(
+      table.partnerId,
+      table.mode,
+      table.score
+    )
+  })
+);
 
-export const analyticsEvents = pgTable("analytics_events", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  eventType: eventTypeEnum("event_type").notNull(),
-  partnerId: uuid("partner_id").references(() => partners.id, {
+export const analyticsEvents = sqliteTable("analytics_events", {
+  id: text("id")
+    .$defaultFn(() => crypto.randomUUID())
+    .primaryKey(),
+  eventType: text("event_type").$type<EventType>().notNull(),
+  partnerId: text("partner_id").references(() => partners.id, {
     onDelete: "set null"
   }),
-  mode: gameModeEnum("mode"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  mode: text("mode").$type<GameMode>(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(nowMs)
 });
 
-export const scoreSessionUniq = pgTable(
+export const scoreSessionUniq = sqliteTable(
   "score_session_uniques",
   {
-    sessionId: uuid("session_id")
+    sessionId: text("session_id")
       .notNull()
       .references(() => gameSessions.id, { onDelete: "cascade" })
   },
@@ -226,3 +268,11 @@ export const scoreSessionUniq = pgTable(
     pk: primaryKey({ columns: [table.sessionId] })
   })
 );
+
+export const syncState = sqliteTable("sync_state", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(nowMs)
+});

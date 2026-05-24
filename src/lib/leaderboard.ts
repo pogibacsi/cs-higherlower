@@ -1,15 +1,13 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { scoreSessionUniq, scores, type gameModeEnum } from "@/db/schema";
+import { scoreSessionUniq, scores, type GameMode } from "@/db/schema";
 import { recordAnalyticsEvent } from "@/lib/analytics";
 import { getDb } from "@/lib/db";
 import { getEnabledPartner } from "@/lib/partners";
 import { hashUserAgent, sanitizeNickname } from "@/lib/security";
 import { getSessionForScore } from "@/lib/game";
 
-type Mode = (typeof gameModeEnum.enumValues)[number];
-
 export async function listLeaderboard(input: {
-  mode: Mode;
+  mode: GameMode;
   date?: string;
   partnerSlug?: string;
   scope: "global" | "partner";

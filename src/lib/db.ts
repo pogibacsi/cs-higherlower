@@ -1,25 +1,34 @@
-import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
 import * as schema from "@/db/schema";
-import { env } from "@/lib/env";
 
-let client: postgres.Sql | null = null;
-let database: PostgresJsDatabase<typeof schema> | null = null;
+export type CloudflareBindings = {
+  DB: D1Database;
+  ADMIN_PASSWORD?: string;
+  PRICE_SYNC_BATCH_SIZE?: string;
+  PRICE_SYNC_DELAY_MS?: string;
+  PRICE_SYNC_CRON_SECRET?: string;
+  DEFAULT_TIMEZONE?: string;
+  NEXT_PUBLIC_APP_URL?: string;
+};
 
-export function getDb() {
-  if (!env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required for database-backed routes.");
-  }
+export type Db = DrizzleD1Database<typeof schema>;
 
-  if (!client) {
-    client = postgres(env.DATABASE_URL, {
-      max: 5,
-      prepare: false
-    });
-    database = drizzle(client, { schema });
-  }
-
-  return database!;
+export function createDb(database: D1Database): Db {
+  return drizzle(database, { schema });
 }
 
-export type Db = ReturnType<typeof getDb>;
+export function getCloudflareEnv() {
+  return getCloudflareContext().env as CloudflareBindings;
+}
+
+export function getDb(database?: D1Database): Db {
+  if (database) return createDb(database);
+
+  const binding = getCloudflareEnv().DB;
+  if (!binding) {
+    throw new Error("Cloudflare D1 binding DB is required.");
+  }
+
+  return createDb(binding);
+}

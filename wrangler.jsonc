@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "cs-higherlower",
+  "main": "./worker.ts",
+  "compatibility_date": "2026-05-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cs-higherlower",
+      "database_id": "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "vars": {
+    "NEXT_PUBLIC_APP_URL": "http://localhost:8787",
+    "DEFAULT_TIMEZONE": "Europe/Brussels",
+    "PRICE_SYNC_BATCH_SIZE": "8",
+    "PRICE_SYNC_DELAY_MS": "1200"
+  },
+  "triggers": {
+    "crons": ["*/30 * * * *"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}

@@ -1,15 +1,23 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { eq } from "drizzle-orm";
-import { getDb } from "../src/lib/db";
-import {
-  currentItemPrices,
-  itemPrices,
-  items,
-  partners,
-  type items as itemsTable
-} from "../src/db/schema";
+import { spawn } from "node:child_process";
+import type { ItemCategory } from "../src/db/schema";
 
-type SeedItem = typeof itemsTable.$inferInsert & { seedPrice: number };
+type SeedItem = {
+  marketHashName: string;
+  displayName: string;
+  category: ItemCategory;
+  rarity: string | null;
+  weaponName: string | null;
+  exterior: string | null;
+  isStatTrak: boolean;
+  isSouvenir: boolean;
+  imageUrl: string;
+  steamMarketUrl: string;
+  active: boolean;
+  seedPrice: number;
+};
 
 const PLACEHOLDER_BASE =
   "https://placehold.co/512x384/151a14/f2eadf/png?text=";
@@ -195,91 +203,94 @@ const covertItems = covertSkinNames.map((name, index) => {
 
 export const seedItems = [...caseItems, ...knifeItems, ...gloveItems, ...covertItems];
 
-async function seed() {
-  const db = getDb();
+function sqlString(value: string | null) {
+  return value === null ? "NULL" : `'${value.replace(/'/g, "''")}'`;
+}
 
-  const [existingPartner] = await db
-    .select()
-    .from(partners)
-    .where(eq(partners.slug, "demo"));
+function sqlBool(value: boolean) {
+  return value ? "1" : "0";
+}
 
-  if (!existingPartner) {
-    await db.insert(partners).values({
-      name: "Demo Partner",
-      slug: "demo",
-      primaryColor: "#d9a441",
-      secondaryColor: "#6f9f87",
-      backgroundColor: "#10140f",
-      textColor: "#f8efe2",
-      borderRadius: "12px",
-      ctaLabel: "Visit partner",
-      ctaUrl: null,
-      allowedDomains: [],
-      enabled: true
-    });
-  }
+function seedSql() {
+  const now = Date.now();
+  const lines = [
+    "PRAGMA foreign_keys = ON;",
+    "BEGIN TRANSACTION;",
+    `INSERT INTO partners (id, name, slug, logo_url, primary_color, secondary_color, background_color, text_color, border_radius, cta_label, cta_url, allowed_domains, enabled, created_at, updated_at)
+VALUES ('demo', 'Demo Partner', 'demo', NULL, '#d9a441', '#6f9f87', '#10140f', '#f8efe2', '12px', 'Visit partner', NULL, '[]', 1, ${now}, ${now})
+ON CONFLICT(slug) DO UPDATE SET
+  name = excluded.name,
+  primary_color = excluded.primary_color,
+  secondary_color = excluded.secondary_color,
+  background_color = excluded.background_color,
+  text_color = excluded.text_color,
+  border_radius = excluded.border_radius,
+  cta_label = excluded.cta_label,
+  enabled = excluded.enabled,
+  updated_at = excluded.updated_at;`
+  ];
 
-  const now = new Date();
   for (const seedItem of seedItems) {
-    const { seedPrice, ...insertItem } = seedItem;
-    await db
-      .insert(items)
-      .values(insertItem)
-      .onConflictDoUpdate({
-        target: items.marketHashName,
-        set: {
-          displayName: insertItem.displayName,
-          category: insertItem.category,
-          rarity: insertItem.rarity,
-          weaponName: insertItem.weaponName,
-          exterior: insertItem.exterior,
-          isStatTrak: insertItem.isStatTrak,
-          isSouvenir: insertItem.isSouvenir,
-          imageUrl: insertItem.imageUrl,
-          steamMarketUrl: insertItem.steamMarketUrl,
-          active: true,
-          updatedAt: now
-        }
-      });
+    const id = seedItem.marketHashName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 96);
 
-    const [created] = await db
-      .select({ id: items.id })
-      .from(items)
-      .where(eq(items.marketHashName, insertItem.marketHashName));
+    lines.push(`INSERT INTO items (id, market_hash_name, display_name, category, rarity, weapon_name, exterior, is_stattrak, is_souvenir, image_url, steam_market_url, active, created_at, updated_at)
+VALUES (${sqlString(id)}, ${sqlString(seedItem.marketHashName)}, ${sqlString(seedItem.displayName)}, ${sqlString(seedItem.category)}, ${sqlString(seedItem.rarity)}, ${sqlString(seedItem.weaponName)}, ${sqlString(seedItem.exterior)}, ${sqlBool(seedItem.isStatTrak)}, ${sqlBool(seedItem.isSouvenir)}, ${sqlString(seedItem.imageUrl)}, ${sqlString(seedItem.steamMarketUrl)}, ${sqlBool(seedItem.active)}, ${now}, ${now})
+ON CONFLICT(market_hash_name) DO UPDATE SET
+  display_name = excluded.display_name,
+  category = excluded.category,
+  rarity = excluded.rarity,
+  weapon_name = excluded.weapon_name,
+  exterior = excluded.exterior,
+  is_stattrak = excluded.is_stattrak,
+  is_souvenir = excluded.is_souvenir,
+  image_url = excluded.image_url,
+  steam_market_url = excluded.steam_market_url,
+  active = excluded.active,
+  updated_at = excluded.updated_at;`);
 
-    if (!created) continue;
+    lines.push(`INSERT INTO item_prices (id, item_id, currency, price_eur, volume, source, fetched_at, status, raw_response)
+VALUES (${sqlString(`${id}-seed`)}, (SELECT id FROM items WHERE market_hash_name = ${sqlString(seedItem.marketHashName)}), 'EUR', ${seedItem.seedPrice.toFixed(2)}, NULL, 'seed', ${now}, 'success', '{"seeded":true}')
+ON CONFLICT(id) DO NOTHING;`);
 
-    await db.insert(itemPrices).values({
-      itemId: created.id,
-      priceEur: seedPrice.toFixed(2),
-      status: "success",
-      source: "seed",
-      rawResponse: { seeded: true }
-    });
-
-    await db
-      .insert(currentItemPrices)
-      .values({
-        itemId: created.id,
-        priceEur: seedPrice.toFixed(2),
-        currency: "EUR",
-        lastSuccessfulFetchAt: now,
-        status: "success",
-        updatedAt: now
-      })
-      .onConflictDoUpdate({
-        target: currentItemPrices.itemId,
-        set: {
-          priceEur: seedPrice.toFixed(2),
-          currency: "EUR",
-          lastSuccessfulFetchAt: now,
-          status: "success",
-          updatedAt: now
-        }
-      });
+    lines.push(`INSERT INTO current_item_prices (item_id, price_eur, currency, last_successful_fetch_at, status, updated_at)
+VALUES ((SELECT id FROM items WHERE market_hash_name = ${sqlString(seedItem.marketHashName)}), ${seedItem.seedPrice.toFixed(2)}, 'EUR', ${now}, 'success', ${now})
+ON CONFLICT(item_id) DO UPDATE SET
+  price_eur = excluded.price_eur,
+  currency = excluded.currency,
+  last_successful_fetch_at = excluded.last_successful_fetch_at,
+  status = excluded.status,
+  updated_at = excluded.updated_at;`);
   }
 
-  console.log(`Seeded ${seedItems.length} items and demo partner.`);
+  lines.push("COMMIT;");
+  return `${lines.join("\n\n")}\n`;
+}
+
+async function run(command: string, args: string[]) {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, { stdio: "inherit", shell: true });
+    child.on("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${command} ${args.join(" ")} exited with ${code}`));
+    });
+    child.on("error", reject);
+  });
+}
+
+async function seed() {
+  const mode = process.argv.includes("--remote") ? "--remote" : "--local";
+  const tmpDir = ".tmp";
+  const seedPath = join(tmpDir, "seed.sql");
+
+  await mkdir(tmpDir, { recursive: true });
+  await writeFile(seedPath, seedSql(), "utf8");
+  await run("wrangler", ["d1", "execute", "cs-higherlower", mode, "--file", seedPath]);
+
+  console.log(`Seeded ${seedItems.length} items and demo partner via D1 ${mode}.`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -1,48 +1,55 @@
 # CS2 Higher / Lower
 
-Embeddable iframe-only CS2 price guessing game built with Next.js, TypeScript, Tailwind, Drizzle, and Supabase-compatible PostgreSQL.
+Embeddable iframe-only CS2 price guessing game built with Next.js, TypeScript,
+Tailwind, Drizzle, Cloudflare Workers, and Cloudflare D1.
 
-## Setup
+## Cloudflare Setup
 
-1. Copy `.env.example` to `.env.local`.
-2. Set `DATABASE_URL` to a Supabase/PostgreSQL connection string.
-3. For local development without Supabase, start Postgres:
-
-```bash
-npm run db:local:up
-```
-
-Use this local URL:
+Install dependencies:
 
 ```bash
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/cs_higherlower"
+npm install
 ```
 
-4. Run migrations:
+Create the D1 database:
 
 ```bash
-npm run db:migrate
+npx wrangler d1 create cs-higherlower
 ```
 
-5. Seed the demo partner and MVP item set:
+Copy the returned `database_id` into `wrangler.jsonc`, replacing
+`REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID`.
+
+Generate and apply migrations:
 
 ```bash
-npm run db:seed
+npm run db:generate
+npm run db:migrate:local
+npm run db:migrate:remote
 ```
 
-6. Run the DB-backed smoke test:
+Seed local or remote D1:
 
 ```bash
-npm run smoke:db
+npm run db:seed:local
+npm run db:seed:remote
 ```
 
-7. Start the app:
+Set production secrets:
 
 ```bash
-npm run dev
+npx wrangler secret put ADMIN_PASSWORD
+npx wrangler secret put PRICE_SYNC_CRON_SECRET
 ```
 
-Demo routes:
+Preview and deploy on Cloudflare Workers:
+
+```bash
+npm run preview
+npm run deploy
+```
+
+Useful routes:
 
 - `/play`
 - `/embed/demo`
@@ -50,8 +57,6 @@ Demo routes:
 - `/admin/items`
 - `/admin/leaderboards`
 - `/admin/price-sync`
-
-Admin routes are protected with HTTP Basic Auth. Use any username and `ADMIN_PASSWORD` as the password.
 
 ## Embed
 
@@ -79,17 +84,17 @@ window.addEventListener("message", (event) => {
 
 ## Price Sync
 
-Gameplay reads stored prices only. Use the mock provider for local MVP testing:
+Gameplay reads stored D1 prices only. The Cloudflare Cron Trigger in
+`wrangler.jsonc` runs every 30 minutes and updates a cursor-based batch so the
+Worker stays inside free-tier subrequest limits.
+
+For local cron testing:
 
 ```bash
-npm run price-sync:mock
+npm run preview
+curl "http://localhost:8787/__scheduled?cron=*/30+*+*+*+*"
 ```
 
-The Steam Community Market provider is isolated behind `PriceProvider` in `src/lib/price-sync`, so it can be replaced by a paid provider later.
-
-For scheduled production syncs, call:
-
-```bash
-POST /api/cron/price-sync
-x-cron-secret: PRICE_SYNC_CRON_SECRET
-```
+Manual admin runs are available from `/admin/price-sync`. The Steam Community
+Market provider is isolated behind `PriceProvider` in `src/lib/price-sync`, so
+it can be replaced by a paid provider later.

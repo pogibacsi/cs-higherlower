@@ -3,7 +3,6 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
-    DATABASE_URL: z.string().url().optional(),
     ADMIN_PASSWORD: z.string().min(1).optional(),
     PRICE_SYNC_BATCH_SIZE: z.coerce.number().int().positive().default(10),
     PRICE_SYNC_DELAY_MS: z.coerce.number().int().nonnegative().default(1200),
@@ -14,7 +13,6 @@ export const env = createEnv({
     NEXT_PUBLIC_APP_URL: z.string().url().optional()
   },
   runtimeEnv: {
-    DATABASE_URL: process.env.DATABASE_URL,
     ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
     PRICE_SYNC_BATCH_SIZE: process.env.PRICE_SYNC_BATCH_SIZE,
     PRICE_SYNC_DELAY_MS: process.env.PRICE_SYNC_DELAY_MS,

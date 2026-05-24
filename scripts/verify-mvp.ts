@@ -3,8 +3,10 @@ import { seedItems } from "./seed";
 
 const requiredFiles = [
   "components.json",
-  "docker-compose.yml",
   "scripts/smoke-db.ts",
+  "wrangler.jsonc",
+  "open-next.config.ts",
+  "worker.ts",
   "src/app/embed/[partnerSlug]/page.tsx",
   "src/app/play/page.tsx",
   "src/app/admin/partners/page.tsx",
@@ -26,12 +28,10 @@ const requiredFiles = [
   "src/lib/price-sync/types.ts",
   "src/lib/price-sync/steam-provider.ts",
   "src/lib/price-sync/mock-provider.ts",
-  "drizzle/0000_colorful_hardball.sql",
-  "drizzle/0001_aberrant_colleen_wing.sql"
+  "drizzle.config.ts"
 ];
 
 const requiredEnv = [
-  "DATABASE_URL",
   "NEXT_PUBLIC_APP_URL",
   "ADMIN_PASSWORD",
   "PRICE_SYNC_BATCH_SIZE",
@@ -92,7 +92,7 @@ async function verify() {
 
   await fileIncludes("src/lib/items.ts", [
     'inArray(currentItemPrices.status, ["success", "stale"])',
-    'gt(currentItemPrices.priceEur, "0")'
+    "gt(currentItemPrices.priceEur, 0)"
   ]);
 
   await fileIncludes("src/lib/validation.ts", [
@@ -105,10 +105,26 @@ async function verify() {
   ]);
 
   await fileIncludes("package.json", [
-    "\"db:local:up\"",
-    "\"smoke:db\"",
+    "\"db:migrate:local\"",
+    "\"db:migrate:remote\"",
+    "\"cf:build\"",
+    "\"@opennextjs/cloudflare\"",
+    "\"wrangler\"",
     "\"@radix-ui/react-slot\"",
     "\"class-variance-authority\""
+  ]);
+
+  await fileIncludes("wrangler.jsonc", [
+    "\"d1_databases\"",
+    "\"binding\": \"DB\"",
+    "\"triggers\"",
+    "\"nodejs_compat\""
+  ]);
+
+  await fileIncludes("worker.ts", [
+    "scheduled",
+    "runPriceSync",
+    "PRICE_SYNC_BATCH_SIZE"
   ]);
 
   await fileIncludes("components.json", ["ui.shadcn.com", "@/components/ui"]);
@@ -132,6 +148,8 @@ async function verify() {
   await fileIncludes("src/lib/price-sync/run.ts", [
     "PRICE_SYNC_BATCH_SIZE",
     "PRICE_SYNC_DELAY_MS",
+    "syncState",
+    "marketHashName",
     "onConflictDoUpdate",
     'status: "stale"'
   ]);

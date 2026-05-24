@@ -6,20 +6,25 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:deploy": "opennextjs-cloudflare deploy",
+    "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "db:local:up": "docker compose up -d db",
-    "db:local:down": "docker compose down",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx scripts/seed.ts",
+    "db:migrate:local": "wrangler d1 migrations apply cs-higherlower --local",
+    "db:migrate:remote": "wrangler d1 migrations apply cs-higherlower --remote",
+    "db:seed:local": "tsx scripts/seed.ts --local",
+    "db:seed:remote": "tsx scripts/seed.ts --remote",
     "verify:mvp": "tsx scripts/verify-mvp.ts",
     "smoke:db": "tsx scripts/smoke-db.ts",
-    "price-sync:mock": "tsx scripts/run-price-sync.ts --mock",
-    "price-sync:steam": "tsx scripts/run-price-sync.ts --steam"
+    "price-sync:mock": "wrangler dev --test-scheduled",
+    "price-sync:steam": "wrangler dev --test-scheduled"
   },
   "dependencies": {
+    "@opennextjs/cloudflare": "^1.13.2",
     "@t3-oss/env-nextjs": "^0.11.1",
     "@radix-ui/react-slot": "^1.1.1",
     "class-variance-authority": "^0.7.1",
@@ -27,13 +32,13 @@
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.468.0",
     "next": "^15.0.3",
-    "postgres": "^3.4.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^2.5.4",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260524.0",
     "@types/node": "^22.10.1",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.2",
@@ -44,7 +49,8 @@
     "postcss": "^8.5.10",
     "tailwindcss": "^3.4.16",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "wrangler": "^4.16.1"
   },
   "overrides": {
     "esbuild": "^0.25.0",
