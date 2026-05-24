@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 96% 0.012 84;
+  --foreground: 18% 0.016 92;
+  --card: 99% 0.01 84;
+  --muted: 91% 0.014 84;
+  --muted-foreground: 42% 0.018 92;
+  --border: 82% 0.016 84;
+  --primary: 67% 0.14 78;
+  --primary-foreground: 17% 0.018 78;
+  --secondary: 57% 0.09 156;
+  --secondary-foreground: 98% 0.01 156;
+  --destructive: 55% 0.22 28;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    linear-gradient(135deg, oklch(98% 0.012 84), oklch(91% 0.02 132)),
+    oklch(var(--background));
+  color: oklch(var(--foreground));
+  font-family:
+    "Aptos", "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui,
+    sans-serif;
+  letter-spacing: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid color-mix(in oklch, oklch(var(--primary)) 70%, white);
+  outline-offset: 3px;
+}
+
+.embed-root {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 12% 18%, color-mix(in oklch, var(--partner-primary) 22%, transparent), transparent 28rem),
+    radial-gradient(circle at 88% 12%, color-mix(in oklch, var(--partner-secondary) 20%, transparent), transparent 30rem),
+    linear-gradient(155deg, color-mix(in oklch, var(--partner-bg) 93%, white), var(--partner-bg));
+  color: var(--partner-text);
+}
+
+.price-mask {
+  background-image: repeating-linear-gradient(
+    90deg,
+    currentColor 0 10px,
+    transparent 10px 16px
+  );
+}
