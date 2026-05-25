@@ -20,6 +20,8 @@
     "db:migrate:remote": "wrangler d1 migrations apply cs-higherlower --remote",
     "db:seed:local": "tsx scripts/seed.ts --local",
     "db:seed:remote": "tsx scripts/seed.ts --remote",
+    "db:images:local": "tsx scripts/update-steam-images.ts --local",
+    "db:images:remote": "tsx scripts/update-steam-images.ts --remote",
     "verify:mvp": "tsx scripts/verify-mvp.ts",
     "smoke:cf": "tsx scripts/smoke-db.ts",
     "price-sync:mock": "tsx scripts/run-price-sync.ts --mock",

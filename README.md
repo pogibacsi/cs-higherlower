@@ -43,6 +43,15 @@ Seed local or remote D1:
 ```bash
 npm run db:seed:local
 npm run db:seed:remote
+npm run db:images:remote
+```
+
+Image resolution uses a static CS item catalog first and falls back to the
+Steam listing page only for missing matches. If Steam rate-limits the fallback,
+resume from the last successful offset:
+
+```bash
+npm run db:images:remote -- --offset=51
 ```
 
 Set production secrets. Admin routes use HTTP Basic Auth; any username is

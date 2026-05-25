@@ -96,11 +96,16 @@ const knifeBases = [
 ];
 
 const knifeItems: SeedItem[] = knifeBases.flatMap((base, index) => [
-  item(`★ ${base} | Doppler (Factory New)`, "knife", 320 + index * 38, {
+  item(
+    `★ ${base} | ${base === "Classic Knife" ? "Slaughter" : "Doppler"} (Factory New)`,
+    "knife",
+    320 + index * 38,
+    {
     rarity: "Covert",
     weaponName: base,
     exterior: "Factory New"
-  }),
+    }
+  ),
   item(`★ ${base} | Fade (Factory New)`, "knife", 410 + index * 42, {
     rarity: "Covert",
     weaponName: base,
@@ -203,6 +208,8 @@ const covertItems = covertSkinNames.map((name, index) => {
 
 export const seedItems = [...caseItems, ...knifeItems, ...gloveItems, ...covertItems];
 
+const legacyInactiveItemIds = ["classic-knife-doppler-factory-new"];
+
 function sqlString(value: string | null) {
   return value === null ? "NULL" : `'${value.replace(/'/g, "''")}'`;
 }
@@ -215,7 +222,6 @@ function seedSql() {
   const now = Date.now();
   const lines = [
     "PRAGMA foreign_keys = ON;",
-    "BEGIN TRANSACTION;",
     `INSERT INTO partners (id, name, slug, logo_url, primary_color, secondary_color, background_color, text_color, border_radius, cta_label, cta_url, allowed_domains, enabled, created_at, updated_at)
 VALUES ('demo', 'Demo Partner', 'demo', NULL, '#d9a441', '#6f9f87', '#10140f', '#f8efe2', '12px', 'Visit partner', NULL, '[]', 1, ${now}, ${now})
 ON CONFLICT(slug) DO UPDATE SET
@@ -239,7 +245,8 @@ ON CONFLICT(slug) DO UPDATE SET
 
     lines.push(`INSERT INTO items (id, market_hash_name, display_name, category, rarity, weapon_name, exterior, is_stattrak, is_souvenir, image_url, steam_market_url, active, created_at, updated_at)
 VALUES (${sqlString(id)}, ${sqlString(seedItem.marketHashName)}, ${sqlString(seedItem.displayName)}, ${sqlString(seedItem.category)}, ${sqlString(seedItem.rarity)}, ${sqlString(seedItem.weaponName)}, ${sqlString(seedItem.exterior)}, ${sqlBool(seedItem.isStatTrak)}, ${sqlBool(seedItem.isSouvenir)}, ${sqlString(seedItem.imageUrl)}, ${sqlString(seedItem.steamMarketUrl)}, ${sqlBool(seedItem.active)}, ${now}, ${now})
-ON CONFLICT(market_hash_name) DO UPDATE SET
+ON CONFLICT(id) DO UPDATE SET
+  market_hash_name = excluded.market_hash_name,
   display_name = excluded.display_name,
   category = excluded.category,
   rarity = excluded.rarity,
@@ -266,7 +273,10 @@ ON CONFLICT(item_id) DO UPDATE SET
   updated_at = excluded.updated_at;`);
   }
 
-  lines.push("COMMIT;");
+  for (const id of legacyInactiveItemIds) {
+    lines.push(`UPDATE items SET active = 0, updated_at = ${now} WHERE id = ${sqlString(id)};`);
+  }
+
   return `${lines.join("\n\n")}\n`;
 }
 

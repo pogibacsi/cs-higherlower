@@ -5,6 +5,7 @@ const requiredFiles = [
   "components.json",
   "scripts/smoke-db.ts",
   "scripts/set-d1-database-id.ts",
+  "scripts/update-steam-images.ts",
   "scripts/verify-cloudflare-deploy.ts",
   "wrangler.jsonc",
   "open-next.config.ts",
@@ -109,6 +110,7 @@ async function verify() {
   await fileIncludes("package.json", [
     "\"db:migrate:local\"",
     "\"db:migrate:remote\"",
+    "\"db:images:remote\"",
     "\"cf:build\"",
     "\"cf:preflight\"",
     "\"cf:set-d1\"",
@@ -141,6 +143,25 @@ async function verify() {
     "npm run cf:set-d1 -- <database_id>",
     "Updated wrangler.jsonc DB database_id"
   ]);
+
+  await fileIncludes("scripts/update-steam-images.ts", [
+    "skins.json",
+    "crates.json",
+    "og:image",
+    "--offset=",
+    "steam-images.sql",
+    "Updated ${resolved} item images"
+  ]);
+
+  await fileIncludes("next.config.ts", [
+    "community.akamai.steamstatic.com"
+  ]);
+
+  const seedScript = await readFile("scripts/seed.ts", "utf8");
+  assert(
+    !seedScript.includes("BEGIN TRANSACTION") && !seedScript.includes("COMMIT;"),
+    "D1 seed SQL must not emit explicit transaction statements."
+  );
 
   await fileIncludes("middleware.ts", [
     "ADMIN_PASSWORD",

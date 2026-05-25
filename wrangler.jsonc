@@ -3,7 +3,9 @@
   "name": "cs-higherlower",
   "main": "./worker.ts",
   "compatibility_date": "2026-05-24",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
@@ -12,8 +14,13 @@
     {
       "binding": "DB",
       "database_name": "cs-higherlower",
-      "database_id": "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID",
+      "database_id": "f1ed626e-04db-46c9-9279-5ddf3dfeeb99",
       "migrations_dir": "drizzle"
+    },
+    {
+      "binding": "cs_higherlower",
+      "database_name": "cs-higherlower",
+      "database_id": "f1ed626e-04db-46c9-9279-5ddf3dfeeb99"
     }
   ],
   "vars": {
@@ -22,7 +29,9 @@
     "PRICE_SYNC_DELAY_MS": "1200"
   },
   "triggers": {
-    "crons": ["*/30 * * * *"]
+    "crons": [
+      "*/30 * * * *"
+    ]
   },
   "observability": {
     "enabled": true
