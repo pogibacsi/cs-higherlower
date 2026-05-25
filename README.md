@@ -18,7 +18,17 @@ npx wrangler d1 create cs-higherlower
 ```
 
 Copy the returned `database_id` into `wrangler.jsonc`, replacing
-`REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID`.
+`REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID`, or run:
+
+```bash
+npm run cf:set-d1 -- DATABASE_ID_FROM_WRANGLER
+```
+
+Check that the deployment config is no longer using placeholders:
+
+```bash
+npm run cf:preflight
+```
 
 Generate and apply migrations:
 
@@ -35,7 +45,8 @@ npm run db:seed:local
 npm run db:seed:remote
 ```
 
-Set production secrets:
+Set production secrets. Admin routes use HTTP Basic Auth; any username is
+accepted, and `ADMIN_PASSWORD` is the password.
 
 ```bash
 npx wrangler secret put ADMIN_PASSWORD
@@ -47,6 +58,17 @@ Preview and deploy on Cloudflare Workers:
 ```bash
 npm run preview
 npm run deploy
+```
+
+The deploy scripts pass `--keep-vars` through to Wrangler so runtime variables
+or secrets configured in the Cloudflare dashboard are not removed during deploy.
+
+With `npm run preview` running in another terminal, smoke-test the Cloudflare
+runtime:
+
+```bash
+npm run smoke:cf
+npm run price-sync:mock
 ```
 
 Useful routes:

@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { env } from "@/lib/env";
 import { iframeSnippet, listPartners } from "@/lib/partners";
 import {
@@ -7,9 +8,20 @@ import {
 
 export const dynamic = "force-dynamic";
 
+async function appOrigin() {
+  if (env.NEXT_PUBLIC_APP_URL) return env.NEXT_PUBLIC_APP_URL;
+
+  const headerBag = await headers();
+  const host = headerBag.get("x-forwarded-host") ?? headerBag.get("host");
+  if (!host) return "http://localhost:3000";
+
+  const proto = headerBag.get("x-forwarded-proto") ?? "https";
+  return `${proto}://${host}`;
+}
+
 export default async function AdminPartnersPage() {
   const partners = await listPartners();
-  const appUrl = env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = await appOrigin();
 
   return (
     <section className="grid gap-6">

@@ -1,18 +1,28 @@
-import { mockPriceProvider } from "../src/lib/price-sync/mock-provider";
-import { runPriceSync } from "../src/lib/price-sync/run";
-import { steamPriceProvider } from "../src/lib/price-sync/steam-provider";
+type PriceSyncRun = {
+  status: string;
+  successCount: number;
+  failCount: number;
+};
 
-const provider = process.argv.includes("--steam")
-  ? steamPriceProvider
-  : mockPriceProvider;
+function baseUrl() {
+  return (process.env.CF_PREVIEW_URL ?? "http://localhost:8787").replace(/\/$/, "");
+}
 
-runPriceSync(provider)
-  .then((run) => {
-    console.log(
-      `Price sync ${run.status}: ${run.successCount} success, ${run.failCount} failed.`
-    );
-  })
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+const provider = process.argv.includes("--steam") ? "steam" : "mock";
+
+const response = await fetch(
+  `${baseUrl()}/api/admin/price-sync/run?provider=${provider}`,
+  { method: "POST" }
+);
+const text = await response.text();
+
+if (!response.ok) {
+  throw new Error(`Price sync request failed: ${response.status} ${text}`);
+}
+
+const run = JSON.parse(text) as PriceSyncRun;
+console.log(
+  `Price sync ${run.status}: ${run.successCount} success, ${run.failCount} failed.`
+);
+
+export {};

@@ -4,9 +4,12 @@ import { seedItems } from "./seed";
 const requiredFiles = [
   "components.json",
   "scripts/smoke-db.ts",
+  "scripts/set-d1-database-id.ts",
+  "scripts/verify-cloudflare-deploy.ts",
   "wrangler.jsonc",
   "open-next.config.ts",
   "worker.ts",
+  "middleware.ts",
   "src/app/embed/[partnerSlug]/page.tsx",
   "src/app/play/page.tsx",
   "src/app/admin/partners/page.tsx",
@@ -32,7 +35,6 @@ const requiredFiles = [
 ];
 
 const requiredEnv = [
-  "NEXT_PUBLIC_APP_URL",
   "ADMIN_PASSWORD",
   "PRICE_SYNC_BATCH_SIZE",
   "PRICE_SYNC_DELAY_MS",
@@ -108,6 +110,9 @@ async function verify() {
     "\"db:migrate:local\"",
     "\"db:migrate:remote\"",
     "\"cf:build\"",
+    "\"cf:preflight\"",
+    "\"cf:set-d1\"",
+    "--keep-vars",
     "\"@opennextjs/cloudflare\"",
     "\"wrangler\"",
     "\"@radix-ui/react-slot\"",
@@ -125,6 +130,22 @@ async function verify() {
     "scheduled",
     "runPriceSync",
     "PRICE_SYNC_BATCH_SIZE"
+  ]);
+
+  await fileIncludes("scripts/verify-cloudflare-deploy.ts", [
+    "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID",
+    "Cloudflare deploy preflight passed."
+  ]);
+
+  await fileIncludes("scripts/set-d1-database-id.ts", [
+    "npm run cf:set-d1 -- <database_id>",
+    "Updated wrangler.jsonc DB database_id"
+  ]);
+
+  await fileIncludes("middleware.ts", [
+    "ADMIN_PASSWORD",
+    "Basic realm",
+    "/api/admin/:path*"
   ]);
 
   await fileIncludes("components.json", ["ui.shadcn.com", "@/components/ui"]);
@@ -155,9 +176,10 @@ async function verify() {
   ]);
 
   await fileIncludes("scripts/smoke-db.ts", [
-    "Database smoke test passed.",
-    "Daily challenge should use the same ordered sequence",
-    "Duplicate score submission should be rejected."
+    "Cloudflare preview smoke test passed.",
+    "CF_PREVIEW_URL",
+    "/api/game/start",
+    "/api/admin/items"
   ]);
 
   const envExample = await readFile(".env.example", "utf8");

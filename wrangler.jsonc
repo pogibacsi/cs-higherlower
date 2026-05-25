@@ -17,7 +17,6 @@
     }
   ],
   "vars": {
-    "NEXT_PUBLIC_APP_URL": "http://localhost:8787",
     "DEFAULT_TIMEZONE": "Europe/Brussels",
     "PRICE_SYNC_BATCH_SIZE": "8",
     "PRICE_SYNC_DELAY_MS": "1200"
